@@ -642,6 +642,7 @@
         currentChatCharacterId: null,
         momentsShownCount: 10,
         gameLoopInterval: null,
+      currentChatView: { messagesShown: 20 }, // 💖 新增的聊天视图状态记忆本！
         music: {
             currentSongId: null,
             isPlaying: false,
@@ -987,14 +988,27 @@
         return '';
     };
 
-    const renderChatMessages = () => {
+        const renderChatMessages = () => {
         const container = document.getElementById('chat-messages-container');
         const character = state.characters.find(c => c.id === state.currentChatCharacterId);
         if (!character) return;
+
+        // --- 💖 核心升级在这里！ 💖 ---
+        const totalMessages = character.history.length;
+        const messagesToShow = state.currentChatView.messagesShown;
         
-        container.innerHTML = '';
+        // 决定要渲染哪一部分历史记录
+        const messagesToRender = character.history.slice(Math.max(totalMessages - messagesToShow, 0));
+
+        container.innerHTML = ''; // 先清空
+
+        // 如果还有更早的记录，就在最上方显示“加载更多”按钮
+        if (totalMessages > messagesToShow) {
+            container.innerHTML += `<button id="show-more-messages-btn" class="styled-button" style="margin: 10px auto; width: 50%; padding: 8px; font-size: 0.8rem; background-color: #eee; color: #555; box-shadow: none;">显示更早的记录</button>`;
+        }
         
-        character.history.forEach(msg => {
+        // 开始渲染消息
+        messagesToRender.forEach(msg => {
             const isSystemMessage = msg.content && msg.content.type === 'transfer_receipt';
             const bubble = document.createElement('div');
             if (isSystemMessage) {
@@ -1035,7 +1049,11 @@
             bubble.innerHTML = messageHTML;
             container.appendChild(bubble);
         });
-        container.scrollTop = container.scrollHeight;
+
+        // 只有在第一次加载时才滚动到底部
+        if (messagesToShow === 20) {
+            container.scrollTop = container.scrollHeight;
+        }
     };
     
     const renderMoments = () => {
@@ -1264,6 +1282,7 @@
     
     const openChatRoom = (characterId) => {
         localStorage.setItem('lastActiveCharacterId', characterId);
+      state.currentChatView.messagesShown = 20; // 💖 每次进来都重置为20条
         state.currentChatCharacterId = characterId;
         
         const character = state.characters.find(c => c.id === characterId);
@@ -2555,7 +2574,20 @@ const replayMusic = () => {
                 }
             }
         });
+    // --- 💖 新增：“显示更早记录”按钮的监听 💖 ---
+    document.getElementById('chat-messages-container').addEventListener('click', e => {
+        if (e.target && e.target.id === 'show-more-messages-btn') {
+            const container = document.getElementById('chat-messages-container');
+            const oldScrollHeight = container.scrollHeight; // 记录加载前的高度
 
+            state.currentChatView.messagesShown += 20; // 每次多显示20条
+            renderChatMessages(); // 重新渲染
+
+            // 重新渲染后，计算高度差，并把滚动条定位到原来的位置，这样就不会跳动了
+            const newScrollHeight = container.scrollHeight;
+            container.scrollTop = newScrollHeight - oldScrollHeight;
+        }
+    });
 
         // Moments comment submission & long-press delete
         let momentPressTimer;
